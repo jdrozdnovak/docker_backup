@@ -27,6 +27,6 @@ COPY backup.py /usr/local/bin/
 COPY entry.sh /usr/local/bin/
 
 RUN chmod +x /usr/local/bin/find_and_backup.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/entry.sh
 
 CMD ["/entry.sh"]
