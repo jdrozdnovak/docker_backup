@@ -29,4 +29,4 @@ COPY entry.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/find_and_backup.sh
 RUN chmod +x /usr/local/bin/entry.sh
 
-CMD ["/entry.sh"]
+CMD ["/usr/local/bin/entry.sh"]
