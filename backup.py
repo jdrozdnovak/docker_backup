@@ -55,7 +55,7 @@ def main():
         subprocess.run(f'docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czf /backup_dir/{real_volume_name}.tar.gz -C / /backup/', shell=True)
         
     # Zip the entire folder
-    zip_file_path = f'{base_dir}/{base_dir}_backup.zip'
+    zip_file_path = f'{base_dir}/backup.zip'
     with ZipFile(zip_file_path, 'w') as zipf:
         for root, dirs, files in os.walk(base_dir):
             for file in files:
