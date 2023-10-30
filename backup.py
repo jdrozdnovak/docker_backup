@@ -14,14 +14,18 @@ def cleanup(base_dir, volume_names):
     if os.path.exists(zip_file_path):
         os.remove(zip_file_path)
 
-def rclone_upload(file_path, remote_name, encrypted_password):
+def rclone_upload(file_path, remote_name, remote_folder, encrypted_password):
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
     encrypted_file = f"{file_path}_{timestamp}_encrypted.zip"
     subprocess.run(f"rclone crypt encode {file_path} {encrypted_file} --password {encrypted_password}", shell=True)
-    subprocess.run(f"rclone copy {encrypted_file} {remote_name}:/jnobackup/{timestamp}/", shell=True)
+    subprocess.run(f"rclone copy {encrypted_file} {remote_name}:/{remote_folder}/{timestamp}/", shell=True)
     os.remove(encrypted_file)
 
 def main():
+    remote_name = os.getenv('RCLONE_REMOTE_NAME')
+    remote_folder = os.getenv('RCLONE_REMOTE_FOLDER')
+    remote_password = os.getenv('RCLONE_REMOTE_PASSWORD')
+
     docker_compose_file = sys.argv[1]
     base_dir = os.path.dirname(docker_compose_file)
 
@@ -57,7 +61,7 @@ def main():
             for file in files:
                 zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), base_dir))
 
-    rclone_upload(zip_file_path, "my-remote", "my-secure-password")
+    rclone_upload(zip_file_path, remote_name, remote_folder, remote_password)
 
     cleanup(base_dir, volume_names)
 
