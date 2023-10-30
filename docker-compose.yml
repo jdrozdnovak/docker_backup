@@ -1,22 +1,17 @@
 version: '3.8'
 
 services:
-  ubuntu-duo-ssh:
-    container_name: ubuntu-duo-ssh
-    image: ghcr.io/jdrozdnovak/ssh-duo-docker:latest
-    ports:
-      - "2222:22"
+  docker-backup:
+    build: 
+      dockerfile: .
+    container_name: docker-backup
+    image: ghcr.io/jdrozdnovak/docker-backup:latest
     environment:
-      - SSH_PASSWORD=${SSH_PASSWORD}
-      - SSH_USER=${SSH_USER}
-      - DUO_SKEY=${DUO_SKEY}
-      - DUO_IKEY=${DUO_IKEY}
-      - DUO_HOST=${DUO_HOST}
-      - PRIVATE_KEY=${PRIVATE_KEY}
+      - CRON_SCHEDULE="0 */6 * * *"
     volumes:
-      - ./ansible/:/app/ansible/
-      - ./ansible/hosts:/etc/ansible/hosts:ro
-      - sshd_config:/app/sshd_config/
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf
+      - /docker/:/docker/
 
 volumes:
   sshd_config:

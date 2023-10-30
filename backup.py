@@ -1,8 +1,25 @@
 import yaml
 import subprocess
 import os
-import shutil
+import sys
 from zipfile import ZipFile
+import datetime
+
+def cleanup(base_dir, volume_names):
+    for volume_name in volume_names:
+        volume_dir = f'{base_dir}/{volume_name}_backup'
+        if os.path.exists(volume_dir):
+            subprocess.run(f"rm -rf {volume_dir}", shell=True)
+    zip_file_path = f'{base_dir}/backup.zip'
+    if os.path.exists(zip_file_path):
+        os.remove(zip_file_path)
+
+def rclone_upload(file_path, remote_name, encrypted_password):
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    encrypted_file = f"{file_path}_{timestamp}_encrypted.zip"
+    subprocess.run(f"rclone crypt encode {file_path} {encrypted_file} --password {encrypted_password}", shell=True)
+    subprocess.run(f"rclone copy {encrypted_file} {remote_name}:/jnobackup/{timestamp}/", shell=True)
+    os.remove(encrypted_file)
 
 def main():
     docker_compose_file = sys.argv[1]
@@ -31,13 +48,18 @@ def main():
     for real_volume_name in real_volume_names:
         volume_dir = f'{base_dir}/{real_volume_name}_backup'
         os.makedirs(volume_dir, exist_ok=True)
-        subprocess.run(f'docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup alpine tar czf /backup/{real_volume_name}.tar.gz /backup/', shell=True)
+        subprocess.run(f'docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czf /backup_dir/{real_volume_name}.tar.gz -C / /backup/', shell=True)
         
     # Zip the entire folder
-    with ZipFile(f'{base_dir}/backup.zip', 'w') as zipf:
+    zip_file_path = f'{base_dir}/{base_dir}_backup.zip'
+    with ZipFile(zip_file_path, 'w') as zipf:
         for root, dirs, files in os.walk(base_dir):
             for file in files:
                 zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), base_dir))
+
+    rclone_upload(zip_file_path, "my-remote", "my-secure-password")
+
+    cleanup(base_dir, volume_names)
 
 if __name__ == "__main__":
     main()
