@@ -2,8 +2,9 @@ version: '3.8'
 
 services:
   docker-backup:
-    build: 
-      dockerfile: .
+    # build:
+    #   context: .
+    #   dockerfile: dockerfile
     container_name: docker-backup
     image: ghcr.io/jdrozdnovak/docker-backup:latest
     environment:
@@ -15,6 +16,3 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf
       - /docker/:/docker/
-
-volumes:
-  sshd_config:
