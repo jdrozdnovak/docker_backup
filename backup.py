@@ -9,6 +9,8 @@ from datetime import datetime
 
 
 class DockerBackup:
+    """Class for performing Docker backups."""
+
     def __init__(self):
         self.remote_name = os.getenv("RCLONE_REMOTE_NAME")
         self.remote_folder = os.getenv("RCLONE_REMOTE_FOLDER")
@@ -16,31 +18,32 @@ class DockerBackup:
         self.validate_and_notify_env_vars()
 
     def execute_command(self, command):
+        """Execute shell command."""
         try:
-            subprocess.run(
-                command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr
-            )
-        except subprocess.CalledProcessError as e:
+            subprocess.run(command, shell=True, check=True,
+                           stdout=sys.stdout, stderr=sys.stderr)
+        except subprocess.CalledProcessError as exc:
             self.notify_failure()
-            sys.stderr.write(f"Error: {e}\n")
+            sys.stderr.write(f"Error: {exc}\n")
             sys.exit(1)
 
     def notify_failure(self):
+        """Notify failure through a URL."""
         if self.fail_notify_url:
             try:
                 requests.post(
-                    self.fail_notify_url, json={"message": "Backup process failed."}
-                )
-            except Exception as e:
+                    self.fail_notify_url, json={"message": "Backup process failed."})
+            except Exception as exc:
                 sys.stderr.write(
-                    f"Failed to notify via URL {self.fail_notify_url}: {e}\n"
-                )
+                    f"Failed to notify via URL {self.fail_notify_url}: {exc}\n")
 
     def validate_and_notify_env_vars(self):
+        """Validate and notify for environment variables."""
         for var in [self.remote_name, self.remote_folder]:
             if not var:
                 self.notify_failure()
-                sys.stderr.write(f"Error: Required environment variable is not set.\n")
+                sys.stderr.write(
+                    "Error: Required environment variable is not set.\n")
                 sys.exit(1)
 
     def remove_file_or_dir(self, path):
@@ -82,11 +85,14 @@ class DockerBackup:
     def backup_volumes_to_zip(self, base_dir, real_volume_names):
         zip_file_path = f"{base_dir}/backup.zip"
         with ZipFile(zip_file_path, "w") as zipf:
-            for root, dirs, files in os.walk(base_dir):
+            for root, _, files in os.walk(base_dir):
                 for file in files:
+                    full_path = os.path.join(root, file)
+                    if full_path == zip_file_path:
+                        continue
                     zipf.write(
-                        os.path.join(root, file),
-                        os.path.relpath(os.path.join(root, file), base_dir),
+                        full_path,
+                        os.path.relpath(full_path, base_dir),
                     )
         return zip_file_path
 
@@ -138,15 +144,16 @@ class DockerBackup:
 
 
 def get_hostname() -> str:
+    """Retrieve the hostname."""
     try:
-        with open("/etc/host_hostname", "r") as f:
-            hostname = f.read().strip()
-    except Exception:
+        with open("/etc/host_hostname", "r") as file:
+            hostname = file.read().strip()
+    except FileNotFoundError:
         hostname = gethostname()
     return hostname
 
 
 if __name__ == "__main__":
-    docker_compose_file = sys.argv[1]
-    backup = DockerBackup()
-    backup.main(docker_compose_file)
+    DOCKER_COMPOSE_FILE = sys.argv[1]
+    BACKUP = DockerBackup()
+    BACKUP.main(DOCKER_COMPOSE_FILE)
