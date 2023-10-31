@@ -17,8 +17,11 @@ class DockerBackup:
 
     def __init__(self):
         self.remote_name = os.getenv("RCLONE_REMOTE_NAME")
+        logger.info(f"Variable found RCLONE_REMOTE_NAME:{self.remote_name}")
         self.remote_folder = os.getenv("RCLONE_REMOTE_FOLDER")
+        logger.info(f"Variable found RCLONE_REMOTE_FOLDER:{self.remote_folder}")
         self.fail_notify_url = os.getenv("FAIL_NOTIFY_URL")
+        logger.info(f"Variable found FAIL_NOTIFY_URL:{self.fail_notify_url}")
         self.validate_and_notify_env_vars()
 
     def execute_command(self, command):
