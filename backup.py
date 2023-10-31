@@ -5,6 +5,7 @@ import subprocess
 from zipfile import ZipFile
 from socket import gethostname
 import requests
+from datetime import datetime
 
 
 class DockerBackup:
@@ -89,15 +90,19 @@ class DockerBackup:
                     )
         return zip_file_path
 
-    def rclone_upload(self, file_path, parent_folder_name):
+    def rclone_upload(self, file_path, parent_folder_name, suffix):
         hostname = get_hostname()
         remote_path = (
             f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
         )
-        self.execute_command(f"rclone copy --progress {file_path} {remote_path}")
+        remote_old_path = (
+            f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
+        )
+        self.execute_command(f"rclone sync --progress {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension")
 
     def main(self, docker_compose_file):
         try:
+            suffix = datetime.now().strftime("%y%m%d%H%M")
             base_dir = os.path.dirname(docker_compose_file)
             parent_folder_name = os.path.basename(base_dir)
 
@@ -123,7 +128,7 @@ class DockerBackup:
 
             zip_file_path = self.backup_volumes_to_zip(base_dir, real_volume_names)
 
-            self.rclone_upload(zip_file_path, parent_folder_name)
+            self.rclone_upload(zip_file_path, parent_folder_name, suffix)
 
             self.cleanup(base_dir, volume_names)
         except Exception as e:
