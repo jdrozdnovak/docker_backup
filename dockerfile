@@ -4,7 +4,7 @@ FROM ubuntu
 RUN apt update
 RUN apt install -y ca-certificates curl gnupg python3.11 python3-pip unzip cron
 RUN python3.11 -m pip install --upgrade pip
-RUN python3.11 -m pip install --upgrade pyyaml
+RUN python3.11 -m pip install pyyaml requests
 RUN install -m 0755 -d /etc/apt/keyrings
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 RUN chmod a+r /etc/apt/keyrings/docker.gpg

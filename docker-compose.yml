@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  docker-backup:
+  docker-backup: #keep the naming, as it would brake the backup itself
     # build:
     #   context: .
     #   dockerfile: dockerfile

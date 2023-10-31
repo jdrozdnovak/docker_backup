@@ -104,7 +104,9 @@ class DockerBackup:
             compose_data = self.read_docker_compose(docker_compose_file)
 
             volume_names = []
-            for _, data in compose_data.get("services", {}).items():
+            for service_name, data in compose_data.get("services", {}).items():
+                if service_name == "docker-backup":
+                    continue
                 for volume in data.get("volumes", []):
                     volume_name = volume.split(":")[0]
                     if volume_name not in volume_names:
