@@ -16,13 +16,25 @@ class DockerBackup:
     """Class for performing Docker backups."""
 
     def __init__(self):
-        self.remote_name = os.getenv("RCLONE_REMOTE_NAME")
-        logger.info(f"Variable found RCLONE_REMOTE_NAME:{self.remote_name}")
-        self.remote_folder = os.getenv("RCLONE_REMOTE_FOLDER")
-        logger.info(f"Variable found RCLONE_REMOTE_FOLDER:{self.remote_folder}")
-        self.fail_notify_url = os.getenv("FAIL_NOTIFY_URL")
-        logger.info(f"Variable found FAIL_NOTIFY_URL:{self.fail_notify_url}")
-        self.validate_and_notify_env_vars()
+        self.read_env_vars_from_file("/env_var")
+
+    def read_env_vars_from_file(self, file_path):
+        try:
+            with open(file_path, "r") as f:
+                lines = f.readlines()
+            for line in lines:
+                key, value = line.strip().split("=")
+                if key == "RCLONE_REMOTE_FOLDER":
+                    self.remote_folder = value
+                elif key == "RCLONE_REMOTE_NAME":
+                    self.remote_name = value
+                elif key == "FAIL_NOTIFY_URL":
+                    self.fail_notify_url = value
+            self.validate_and_notify_env_vars()
+        except Exception as e:
+            sys.stderr.write(f"Error reading environment variables from file: {e}\n")
+            self.notify_failure()
+            sys.exit(1)
 
     def execute_command(self, command):
         """Execute shell command."""
