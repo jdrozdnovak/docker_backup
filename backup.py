@@ -26,7 +26,7 @@ class DockerBackup:
             with open(file_path, "r") as f:
                 lines = f.readlines()
             for line in lines:
-                key, value = line.strip().split("=")
+                key, value = line.strip().split("=", 1)
                 if key == "RCLONE_REMOTE_FOLDER":
                     self.remote_folder = value
                 elif key == "RCLONE_REMOTE_NAME":
