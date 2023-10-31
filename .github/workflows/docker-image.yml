@@ -38,3 +38,5 @@ jobs:
           tags: |
             ghcr.io/jdrozdnovak/docker-backup:$GITHUB_RUN_NUMBER
             ghcr.io/jdrozdnovak/docker-backup:latest
+        env:
+          GITHUB_REF: ${{ vars.GITHUB_RUN_NUMBER }}
