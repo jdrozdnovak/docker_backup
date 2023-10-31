@@ -7,86 +7,126 @@ from socket import gethostname
 import requests
 
 
-def execute_command(command):
-    try:
-        subprocess.run(
-            command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr
-        )
-    except subprocess.CalledProcessError as e:
-        sys.stderr.write(f"Error: {e}\n")
-        sys.exit(1)
+class DockerBackup:
+    def __init__(self):
+        self.remote_name = os.getenv("RCLONE_REMOTE_NAME")
+        self.remote_folder = os.getenv("RCLONE_REMOTE_FOLDER")
+        self.fail_notify_url = os.getenv("FAIL_NOTIFY_URL")
+        self.validate_and_notify_env_vars()
 
-
-def notify_failure(fail_url):
-    try:
-        requests.post(fail_url, json={"message": "Backup process failed."})
-    except Exception as e:
-        sys.stderr.write(f"Failed to notify via URL {fail_url}: {e}\n")
-
-
-def remove_file_or_dir(path):
-    if os.path.exists(path):
-        if os.path.isdir(path):
-            execute_command(f"rm -rf {path}")
-        else:
-            os.remove(path)
-
-
-def cleanup(base_dir, volume_names):
-    for volume_name in volume_names:
-        remove_file_or_dir(f"{base_dir}/{volume_name}_backup")
-    remove_file_or_dir(f"{base_dir}/backup.zip")
-
-
-def read_docker_compose(file_path):
-    try:
-        with open(file_path, "r") as file:
-            return yaml.safe_load(file)
-    except Exception as e:
-        sys.stderr.write(f"Failed to read docker-compose file: {e}\n")
-        sys.exit(1)
-
-
-def get_real_volume_names(volume_names):
-    real_volume_names = []
-    for volume_name in volume_names:
+    def execute_command(self, command):
         try:
-            cmd_output = subprocess.getoutput(
-                f"docker volume ls --filter name=^{volume_name}$"
+            subprocess.run(
+                command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr
             )
-            if cmd_output:
-                real_volume_names.append(volume_name)
-        except Exception as e:
-            sys.stderr.write(f"Failed to fetch docker volumes: {e}\n")
+        except subprocess.CalledProcessError as e:
+            self.notify_failure()
+            sys.stderr.write(f"Error: {e}\n")
             sys.exit(1)
-    return real_volume_names
 
-
-def backup_volumes_to_zip(base_dir, real_volume_names):
-    zip_file_path = f"{base_dir}/backup.zip"
-    with ZipFile(zip_file_path, "w") as zipf:
-        for root, dirs, files in os.walk(base_dir):
-            for file in files:
-                zipf.write(
-                    os.path.join(root, file),
-                    os.path.relpath(os.path.join(root, file), base_dir),
+    def notify_failure(self):
+        if self.fail_notify_url:
+            try:
+                requests.post(
+                    self.fail_notify_url, json={"message": "Backup process failed."}
                 )
-    return zip_file_path
+            except Exception as e:
+                sys.stderr.write(
+                    f"Failed to notify via URL {self.fail_notify_url}: {e}\n"
+                )
 
+    def validate_and_notify_env_vars(self):
+        for var in [self.remote_name, self.remote_folder]:
+            if not var:
+                self.notify_failure()
+                sys.stderr.write(f"Error: Required environment variable is not set.\n")
+                sys.exit(1)
 
-def rclone_upload(file_path, remote_name, remote_folder, parent_folder_name):
-    hostname = get_hostname()
-    remote_path = f"{remote_name}:/{remote_folder}/{hostname}/{parent_folder_name}/"
-    execute_command(f"rclone copy --progress {file_path} {remote_path}")
+    def remove_file_or_dir(self, path):
+        if os.path.exists(path):
+            if os.path.isdir(path):
+                self.execute_command(f"rm -rf {path}")
+            else:
+                os.remove(path)
 
+    def cleanup(self, base_dir, volume_names):
+        for volume_name in volume_names:
+            self.remove_file_or_dir(f"{base_dir}/{volume_name}_backup")
+        self.remove_file_or_dir(f"{base_dir}/backup.zip")
 
-def validate_and_notify_env_vars(vars_list):
-    fail_url = os.getenv("FAIL_NOTIFY_URL")
-    for var in vars_list:
-        if not os.getenv(var):
-            sys.stderr.write(f"Error: Environment variable {var} is not set.\n")
-            if fail_url:
-                notify_failure(fail_url)
+    def read_docker_compose(self, file_path):
+        try:
+            with open(file_path, "r") as file:
+                return yaml.safe_load(file)
+        except Exception as e:
+            self.notify_failure()
+            sys.stderr.write(f"Failed to read docker-compose file: {e}\n")
+            sys.exit(1)
+
+    def get_real_volume_names(self, volume_names):
+        real_volume_names = []
+        for volume_name in volume_names:
+            try:
+                cmd_output = subprocess.getoutput(
+                    f"docker volume ls --filter name=^{volume_name}$"
+                )
+                if cmd_output:
+                    real_volume_names.append(volume_name)
+            except Exception as e:
+                self.notify_failure()
+                sys.stderr.write(f"Failed to fetch docker volumes: {e}\n")
+                sys.exit(1)
+        return real_volume_names
+
+    def backup_volumes_to_zip(self, base_dir, real_volume_names):
+        zip_file_path = f"{base_dir}/backup.zip"
+        with ZipFile(zip_file_path, "w") as zipf:
+            for root, dirs, files in os.walk(base_dir):
+                for file in files:
+                    zipf.write(
+                        os.path.join(root, file),
+                        os.path.relpath(os.path.join(root, file), base_dir),
+                    )
+        return zip_file_path
+
+    def rclone_upload(self, file_path, parent_folder_name):
+        hostname = get_hostname()
+        remote_path = (
+            f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
+        )
+        self.execute_command(f"rclone copy --progress {file_path} {remote_path}")
+
+    def main(self, docker_compose_file):
+        try:
+            base_dir = os.path.dirname(docker_compose_file)
+            parent_folder_name = os.path.basename(base_dir)
+
+            compose_data = self.read_docker_compose(docker_compose_file)
+
+            volume_names = []
+            for _, data in compose_data.get("services", {}).items():
+                for volume in data.get("volumes", []):
+                    volume_name = volume.split(":")[0]
+                    if volume_name not in volume_names:
+                        volume_names.append(volume_name)
+
+            real_volume_names = self.get_real_volume_names(volume_names)
+
+            for real_volume_name in real_volume_names:
+                volume_dir = f"{base_dir}/{real_volume_name}_backup"
+                os.makedirs(volume_dir, exist_ok=True)
+                self.execute_command(
+                    f"docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czf /backup_dir/{real_volume_name}.tar.gz -C / /backup/"
+                )
+
+            zip_file_path = self.backup_volumes_to_zip(base_dir, real_volume_names)
+
+            self.rclone_upload(zip_file_path, parent_folder_name)
+
+            self.cleanup(base_dir, volume_names)
+        except Exception as e:
+            sys.stderr.write(f"Backup process failed: {e}\n")
+            self.notify_failure()
             sys.exit(1)
 
 
@@ -94,52 +134,12 @@ def get_hostname() -> str:
     try:
         with open("/etc/host_hostname", "r") as f:
             hostname = f.read().strip()
-    except Exception as e:
+    except Exception:
         hostname = gethostname()
     return hostname
 
 
-def main():
-    validate_and_notify_env_vars(["RCLONE_REMOTE_NAME", "RCLONE_REMOTE_FOLDER"])
-
-    remote_name = os.getenv("RCLONE_REMOTE_NAME")
-    remote_folder = os.getenv("RCLONE_REMOTE_FOLDER")
-    docker_compose_file = sys.argv[1]
-    base_dir = os.path.dirname(docker_compose_file)
-    parent_folder_name = os.path.basename(base_dir)
-
-    compose_data = read_docker_compose(docker_compose_file)
-
-    volume_names = []
-    for _, data in compose_data.get("services", {}).items():
-        for volume in data.get("volumes", []):
-            volume_name = volume.split(":")[0]
-            if volume_name not in volume_names:
-                volume_names.append(volume_name)
-
-    try:
-        real_volume_names = get_real_volume_names(volume_names)
-
-        for real_volume_name in real_volume_names:
-            volume_dir = f"{base_dir}/{real_volume_name}_backup"
-            os.makedirs(volume_dir, exist_ok=True)
-            execute_command(
-                f"docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czf /backup_dir/{real_volume_name}.tar.gz -C / /backup/"
-            )
-
-        zip_file_path = backup_volumes_to_zip(base_dir, real_volume_names)
-
-        rclone_upload(zip_file_path, remote_name, remote_folder, parent_folder_name)
-
-        cleanup(base_dir, volume_names)
-        pass
-    except Exception as e:
-        sys.stderr.write(f"Backup process failed: {e}\n")
-        fail_url = os.getenv("FAIL_NOTIFY_URL")
-        if fail_url:
-            notify_failure(fail_url)
-        sys.exit(1)
-
-
 if __name__ == "__main__":
-    main()
+    docker_compose_file = sys.argv[1]
+    backup = DockerBackup()
+    backup.main(docker_compose_file)
