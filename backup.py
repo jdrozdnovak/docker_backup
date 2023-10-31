@@ -2,10 +2,14 @@ import os
 import sys
 import yaml
 import subprocess
+import logging
 from zipfile import ZipFile
 from socket import gethostname
 import requests
 from datetime import datetime
+
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logger = logging.getLogger(__name__)
 
 
 class DockerBackup:
@@ -20,11 +24,12 @@ class DockerBackup:
     def execute_command(self, command):
         """Execute shell command."""
         try:
-            subprocess.run(command, shell=True, check=True,
-                           stdout=sys.stdout, stderr=sys.stderr)
+            subprocess.run(
+                command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr
+            )
         except subprocess.CalledProcessError as exc:
             self.notify_failure()
-            sys.stderr.write(f"Error: {exc}\n")
+            logger.error(f"Error: {exc}")
             sys.exit(1)
 
     def notify_failure(self):
@@ -32,18 +37,17 @@ class DockerBackup:
         if self.fail_notify_url:
             try:
                 requests.post(
-                    self.fail_notify_url, json={"message": "Backup process failed."})
+                    self.fail_notify_url, json={"message": "Backup process failed."}
+                )
             except Exception as exc:
-                sys.stderr.write(
-                    f"Failed to notify via URL {self.fail_notify_url}: {exc}\n")
+                logger.error(f"Failed to notify via URL {self.fail_notify_url}: {exc}")
 
     def validate_and_notify_env_vars(self):
         """Validate and notify for environment variables."""
         for var in [self.remote_name, self.remote_folder]:
             if not var:
                 self.notify_failure()
-                sys.stderr.write(
-                    "Error: Required environment variable is not set.\n")
+                logger.error("Required environment variable is not set.")
                 sys.exit(1)
 
     def remove_file_or_dir(self, path):
@@ -64,7 +68,7 @@ class DockerBackup:
                 return yaml.safe_load(file)
         except Exception as e:
             self.notify_failure()
-            sys.stderr.write(f"Failed to read docker-compose file: {e}\n")
+            logger.error(f"Failed to read docker-compose file: {e}")
             sys.exit(1)
 
     def get_real_volume_names(self, volume_names):
@@ -78,7 +82,7 @@ class DockerBackup:
                     real_volume_names.append(volume_name)
             except Exception as e:
                 self.notify_failure()
-                sys.stderr.write(f"Failed to fetch docker volumes: {e}\n")
+                logger.error(f"Failed to fetch docker volumes: {e}")
                 sys.exit(1)
         return real_volume_names
 
@@ -101,10 +105,10 @@ class DockerBackup:
         remote_path = (
             f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
         )
-        remote_old_path = (
-            f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
+        remote_old_path = f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
+        self.execute_command(
+            f"rclone sync --progress {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension"
         )
-        self.execute_command(f"rclone sync --progress {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension")
 
     def main(self, docker_compose_file):
         try:
@@ -129,7 +133,7 @@ class DockerBackup:
                 volume_dir = f"{base_dir}/{real_volume_name}_backup"
                 os.makedirs(volume_dir, exist_ok=True)
                 self.execute_command(
-                    f"docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czf /backup_dir/{real_volume_name}.tar.gz -C / /backup/"
+                    f"docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czfP /backup_dir/{real_volume_name}.tar.gz -C / /backup/"
                 )
 
             zip_file_path = self.backup_volumes_to_zip(base_dir, real_volume_names)
@@ -137,8 +141,9 @@ class DockerBackup:
             self.rclone_upload(zip_file_path, parent_folder_name, suffix)
 
             self.cleanup(base_dir, volume_names)
+            logging.info("Backup completed successfully.")
         except Exception as e:
-            sys.stderr.write(f"Backup process failed: {e}\n")
+            logger.error(f"Backup process failed: {e}")
             self.notify_failure()
             sys.exit(1)
 

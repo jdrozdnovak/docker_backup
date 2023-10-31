@@ -19,7 +19,8 @@ RUN apt update && \
     curl https://rclone.org/install.sh | bash && \
     apt upgrade -y && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    touch /var/spool/cron/crontabs/root
 
 # Copy only necessary files
 COPY find_and_backup.sh /usr/local/bin/
