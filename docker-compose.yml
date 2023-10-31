@@ -11,7 +11,10 @@ services:
       - CRON_SCHEDULE="0 */6 * * *"
       - RCLONE_REMOTE_NAME
       - RCLONE_REMOTE_FOLDER
+      - RCLONE_REMOTE_FOLDER
+      - FAIL_NOTIFY_URL
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf
       - /docker/:/docker/
+      - /etc/hostname:/etc/host_hostname:ro
