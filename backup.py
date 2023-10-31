@@ -142,7 +142,9 @@ class DockerBackup:
                 if service_name == "docker-backup":
                     continue
                 for volume in data.get("volumes", []):
-                    volume_name = volume.split(":")[0]
+                    volume_name, _, _ = volume.partition(":")
+                    if os.path.isabs(volume_name):
+                        continue
                     if volume_name not in volume_names:
                         volume_names.append(volume_name)
 
