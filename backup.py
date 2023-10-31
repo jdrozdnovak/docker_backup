@@ -16,6 +16,9 @@ class DockerBackup:
     """Class for performing Docker backups."""
 
     def __init__(self):
+        self.remote_folder = None
+        self.remote_name = None
+        self.fail_notify_url = None
         self.read_env_vars_from_file("/env_var")
 
     def read_env_vars_from_file(self, file_path):
@@ -39,6 +42,7 @@ class DockerBackup:
     def execute_command(self, command):
         """Execute shell command."""
         try:
+            logger.info(f"Running\n{command}")
             subprocess.run(
                 command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr
             )
