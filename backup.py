@@ -102,10 +102,12 @@ class DockerBackup:
                 continue
             for volume in data.get("volumes", []):
                 volume_name = volume.split(":")[0]
-                if os.path.isabs(volume_name) or volume_name.startswith("."):
+                if os.path.isabs(volume_name):
                     volume_name = self.normalize_path(
                         os.path.join(base_dir, volume_name)
                     )
+                elif volume_name.startswith("."):
+                    continue
                 if volume_name not in real_volume_names:
                     real_volume_names.append(volume_name)
         return real_volume_names
@@ -142,7 +144,6 @@ class DockerBackup:
 
     def main(self, docker_compose_file):
         base_dir = os.path.dirname(docker_compose_file)
-        logger.info(f"base_dir: {base_dir}")
         compose_data = self.read_docker_compose(docker_compose_file)
         logger.info(f"base_dir: {compose_data}")
         real_volume_names = self.get_real_volume_names(compose_data, base_dir)
@@ -155,6 +156,8 @@ class DockerBackup:
             volume_backup_path = (
                 f"{volume_dir}/{os.path.basename(real_volume_name)}.tar.gz"
             )
+            if volume_backup_path.startswith("/"):
+                os.makedirs(volume_backup_path, exist_ok=True)
             self.execute_command(
                 f"docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czfP {volume_backup_path} -C / /backup/"
             )
