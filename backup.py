@@ -50,6 +50,7 @@ class DockerBackup:
             result = subprocess.run(
                 command, shell=True, check=True, capture_output=True, text=True
             )
+            logger.info(result)
             return result
         except subprocess.CalledProcessError as exc:
             self.notify_failure()
@@ -98,15 +99,15 @@ class DockerBackup:
         command = 'docker volume ls --format "{{.Name}}"'
         try:
             result = self.execute_command(command)
-            volumes = result.stdout.strip().split("\\n")
+            volumes = result.stdout.strip().split("\n")
+            logger.info(volumes)
             return volumes
         except subprocess.CalledProcessError as e:
             logger.error("Failed to list Docker volumes: %s", e)
             return []
 
-    def get_real_volume_names(self, compose_data, base_dir):
+    def get_real_volume_names(self, compose_data, base_dir, docker_volumes):
         real_volume_names = []
-        docker_volumes = self.list_docker_volumes()
         for service_name, data in compose_data.get("services", {}).items():
             if service_name == "docker-backup":
                 continue
@@ -163,9 +164,10 @@ class DockerBackup:
         return hostname
 
     def main(self, docker_compose_file):
+        docker_volumes = self.list_docker_volumes()
         base_dir = os.path.dirname(docker_compose_file)
         compose_data = self.read_docker_compose(docker_compose_file)
-        real_volume_names = self.get_real_volume_names(compose_data, base_dir)
+        real_volume_names = self.get_real_volume_names(compose_data, base_dir, docker_volumes)
 
         for real_volume_name in real_volume_names:
             if real_volume_name.startswith("/"):
