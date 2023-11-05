@@ -45,12 +45,12 @@ class DockerBackup:
             sys.exit(1)
 
     def execute_command(self, command):
-        """Execute shell command."""
         try:
             logger.info(f"Running\n{command}")
-            subprocess.run(
-                command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr
+            result = subprocess.run(
+                command, shell=True, check=True, capture_output=True, text=True
             )
+            return result
         except subprocess.CalledProcessError as exc:
             self.notify_failure()
             logger.error(f"Error: {exc}")
@@ -61,7 +61,7 @@ class DockerBackup:
         try:
             requests.get(
                 self.fail_notify_url,
-                )
+            )
         except Exception as exc:
             logger.error(f"Failed to notify via URL {self.fail_notify_url}: {exc}")
 
@@ -94,15 +94,33 @@ class DockerBackup:
             logger.error(f"Failed to read docker-compose file: {e}")
             sys.exit(1)
 
+    def list_docker_volumes(self):
+        command = 'docker volume ls --format "{{.Name}}"'
+        try:
+            result = self.execute_command(command)
+            volumes = result.stdout.strip().split("\\n")
+            return volumes
+        except subprocess.CalledProcessError as e:
+            logger.error("Failed to list Docker volumes: %s", e)
+            return []
+
     def get_real_volume_names(self, compose_data, base_dir):
         real_volume_names = []
+        docker_volumes = self.list_docker_volumes()
         for service_name, data in compose_data.get("services", {}).items():
             if service_name == "docker-backup":
                 continue
             for volume in data.get("volumes", []):
                 volume_name = volume.split(":")[0]
                 if "/" not in volume_name:
-                    pass
+                    volume_found = False
+                    for docker_volume_name in docker_volumes:
+                        if volume_name in docker_volume_name:
+                            volume_name = docker_volume_name
+                            volume_found = True
+                            break
+                    if not volume_found:
+                        continue
                 elif volume_name.startswith(".") or not volume_name.endswith("/"):
                     logger.info(f"skipping : {volume_name}")
                     continue
@@ -151,13 +169,9 @@ class DockerBackup:
 
         for real_volume_name in real_volume_names:
             if real_volume_name.startswith("/"):
-                volume_backup_path = (
-                    f"/backup_dir{real_volume_name}.tar.gz"
-                )
+                volume_backup_path = f"/backup_dir{real_volume_name}.tar.gz"
             else:
-                volume_backup_path = (
-                    f"/backup_dir/{real_volume_name}.tar.gz"
-                )
+                volume_backup_path = f"/backup_dir/{real_volume_name}.tar.gz"
             self.execute_command(
                 f"docker run --rm --volume {real_volume_name}:/backup --volume {base_dir}:/backup_dir ubuntu tar czfP {volume_backup_path} -C / /backup/"
             )
