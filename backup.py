@@ -101,7 +101,9 @@ class DockerBackup:
                 continue
             for volume in data.get("volumes", []):
                 volume_name = volume.split(":")[0]
-                if volume_name.startswith(".") or not volume_name.endswith("/"):
+                if "/" not in volume_name:
+                    pass
+                elif volume_name.startswith(".") or not volume_name.endswith("/"):
                     logger.info(f"skipping : {volume_name}")
                     continue
                 elif os.path.isabs(volume_name):
