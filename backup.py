@@ -122,7 +122,7 @@ class DockerBackup:
         return zip_file_path
 
     def rclone_upload(self, file_path, parent_folder_name, suffix):
-        hostname = get_hostname()
+        hostname = self.get_hostname()
         remote_path = (
             f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
         )
@@ -131,7 +131,7 @@ class DockerBackup:
             f"rclone sync --progress {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension"
         )
 
-    def get_hostname() -> str:
+    def get_hostname(self) -> str:
         """Retrieve the hostname."""
         try:
             with open("/etc/host_hostname", "r") as file:
@@ -142,11 +142,15 @@ class DockerBackup:
 
     def main(self, docker_compose_file):
         base_dir = os.path.dirname(docker_compose_file)
+        logger.info(f"base_dir: {base_dir}")
         compose_data = self.read_docker_compose(docker_compose_file)
+        logger.info(f"base_dir: {compose_data}")
         real_volume_names = self.get_real_volume_names(compose_data, base_dir)
+        logger.info(f"real_volume_names: {real_volume_names}")
 
         for real_volume_name in real_volume_names:
             volume_dir = self.normalize_path(f"{base_dir}/{real_volume_name}_backup")
+            logger.info(f"volume_dir: {volume_dir}")
             os.makedirs(volume_dir, exist_ok=True)
             volume_backup_path = (
                 f"{volume_dir}/{os.path.basename(real_volume_name)}.tar.gz"

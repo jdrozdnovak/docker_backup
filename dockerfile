@@ -4,7 +4,7 @@ FROM ubuntu:latest as build-stage
 # Update and install all packages in a single RUN command to minimize layers
 # Also clean up package lists to free up space
 RUN apt update && \
-    apt install -y ca-certificates curl gnupg python3.11 python3-pip unzip cron && \
+    apt install -y ca-certificates curl gnupg python3.11 python3-pip unzip cron vim && \
     python3.11 -m pip install --upgrade pip && \
     python3.11 -m pip install pyyaml requests && \
     install -m 0755 -d /etc/apt/keyrings && \
