@@ -43,6 +43,7 @@ class DockerBackup:
         """Execute shell command."""
         try:
             logger.info(f"Running\n{command}")
+            command = command.replace(" ./", " ").replace("/./", "/")
             subprocess.run(
                 command, shell=True, check=True, stdout=sys.stdout, stderr=sys.stderr
             )
@@ -52,14 +53,15 @@ class DockerBackup:
             sys.exit(1)
 
     def notify_failure(self):
-        """Notify failure through a URL."""
+        """Notify failure through a URL, ensuring no extra quotes."""
         if self.fail_notify_url:
+            sanitized_url = self.fail_notify_url.strip('"').strip("'")
             try:
                 requests.post(
-                    self.fail_notify_url, json={"message": "Backup process failed."}
+                    sanitized_url, json={"message": "Backup process failed."}
                 )
             except Exception as exc:
-                logger.error(f"Failed to notify via URL {self.fail_notify_url}: {exc}")
+                logger.error(f"Failed to notify via URL {sanitized_url}: {exc}")
 
     def validate_and_notify_env_vars(self):
         """Validate and notify for environment variables."""
@@ -93,6 +95,10 @@ class DockerBackup:
     def get_real_volume_names(self, volume_names):
         real_volume_names = []
         for volume_name in volume_names:
+            # Check if the volume name is a path and convert it to an absolute path if it is relative
+            if '/' in volume_name:
+                volume_name = os.path.abspath(volume_name)
+            # Now proceed to check if this volume exists
             try:
                 cmd_output = subprocess.getoutput(
                     f"docker volume ls --filter name=^{volume_name}$"
