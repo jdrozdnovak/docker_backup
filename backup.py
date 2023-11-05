@@ -58,13 +58,12 @@ class DockerBackup:
 
     def notify_failure(self):
         """Notify failure through a URL."""
-        if self.fail_notify_url:
-            try:
-                requests.post(
-                    self.fail_notify_url, json={"message": "Backup process failed."}
+        try:
+            requests.get(
+                self.fail_notify_url,
                 )
-            except Exception as exc:
-                logger.error(f"Failed to notify via URL {self.fail_notify_url}: {exc}")
+        except Exception as exc:
+            logger.error(f"Failed to notify via URL {self.fail_notify_url}: {exc}")
 
     def validate_and_notify_env_vars(self):
         """Validate and notify for environment variables."""
@@ -102,12 +101,13 @@ class DockerBackup:
                 continue
             for volume in data.get("volumes", []):
                 volume_name = volume.split(":")[0]
-                if os.path.isabs(volume_name):
+                if volume_name.startswith(".") or not volume_name.endswith("/"):
+                    logger.info(f"skipping : {volume_name}")
+                    continue
+                elif os.path.isabs(volume_name):
                     volume_name = self.normalize_path(
                         os.path.join(base_dir, volume_name)
                     )
-                elif volume_name.startswith("."):
-                    continue
                 if volume_name not in real_volume_names:
                     real_volume_names.append(volume_name)
         return real_volume_names
@@ -130,7 +130,7 @@ class DockerBackup:
         )
         remote_old_path = f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
         self.execute_command(
-            f"rclone sync --progress {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension"
+            f"rclone sync --progress {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
         )
 
     def get_hostname(self) -> str:
@@ -145,21 +145,14 @@ class DockerBackup:
     def main(self, docker_compose_file):
         base_dir = os.path.dirname(docker_compose_file)
         compose_data = self.read_docker_compose(docker_compose_file)
-        logger.info(f"base_dir: {compose_data}")
         real_volume_names = self.get_real_volume_names(compose_data, base_dir)
-        logger.info(f"real_volume_names: {real_volume_names}")
 
         for real_volume_name in real_volume_names:
-            volume_dir = self.normalize_path(f"{base_dir}/{real_volume_name}_backup")
-            logger.info(f"volume_dir: {volume_dir}")
-            os.makedirs(volume_dir, exist_ok=True)
             volume_backup_path = (
-                f"{volume_dir}/{os.path.basename(real_volume_name)}.tar.gz"
+                f"/backup_dir{real_volume_name}.tar.gz"
             )
-            if volume_backup_path.startswith("/"):
-                os.makedirs(volume_backup_path, exist_ok=True)
             self.execute_command(
-                f"docker run --rm --volume {real_volume_name}:/backup --volume {volume_dir}:/backup_dir ubuntu tar czfP {volume_backup_path} -C / /backup/"
+                f"docker run --rm --volume {real_volume_name}:/backup --volume {base_dir}:/backup_dir ubuntu tar czfP {volume_backup_path} -C / /backup/"
             )
 
         backup_zip_path = self.backup_volumes_to_zip(base_dir, real_volume_names)
