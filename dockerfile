@@ -4,7 +4,7 @@ FROM ubuntu:latest as build-stage
 # Update and install all packages in a single RUN command to minimize layers
 # Also clean up package lists to free up space
 RUN apt update && \
-    apt install -y ca-certificates curl gnupg python3.11 python3-pip unzip cron vim && \
+    apt install -y ca-certificates curl gnupg python3.11 python3-pip unzip cron && \
     python3.11 -m pip install --upgrade pip && \
     python3.11 -m pip install pyyaml requests && \
     install -m 0755 -d /etc/apt/keyrings && \
@@ -18,6 +18,8 @@ RUN apt update && \
     apt install docker-ce-cli -y && \
     curl https://rclone.org/install.sh | bash && \
     apt upgrade -y && \
+    apt remove gnupg curl python3-pip unzip -y && \
+    apt autoremove -y  && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     touch /var/spool/cron/crontabs/root
