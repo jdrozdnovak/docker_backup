@@ -150,9 +150,14 @@ class DockerBackup:
         real_volume_names = self.get_real_volume_names(compose_data, base_dir)
 
         for real_volume_name in real_volume_names:
-            volume_backup_path = (
-                f"/backup_dir{real_volume_name}.tar.gz"
-            )
+            if real_volume_name.startswith("/"):
+                volume_backup_path = (
+                    f"/backup_dir{real_volume_name}.tar.gz"
+                )
+            else:
+                volume_backup_path = (
+                    f"/backup_dir/{real_volume_name}.tar.gz"
+                )
             self.execute_command(
                 f"docker run --rm --volume {real_volume_name}:/backup --volume {base_dir}:/backup_dir ubuntu tar czfP {volume_backup_path} -C / /backup/"
             )
