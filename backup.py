@@ -51,7 +51,6 @@ class DockerBackup:
             result = subprocess.run(
                 command, shell=True, check=True, capture_output=True, text=True
             )
-            logger.info(result)
             return result
         except subprocess.CalledProcessError as exc:
             self.notify_failure()
