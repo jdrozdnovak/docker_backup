@@ -37,7 +37,7 @@ RUN chmod +x /usr/local/bin/find_and_backup.sh && \
 # Declare volumes
 VOLUME /docker/
 VOLUME /var/run/docker.sock
-VOLUME /root/.config/rclone/
+VOLUME /root/.config/rclone/tmp/
 
 # Final CMD
 CMD ["/usr/local/bin/entry.sh"]

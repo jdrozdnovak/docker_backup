@@ -5,6 +5,7 @@ echo "$CRON_SCHEDULE"
 echo $RCLONE_REMOTE_FOLDER
 echo $RCLONE_REMOTE_NAME
 echo $FAIL_NOTIFY_URL
+cp /root/.config/rclone/tmp/rclone.conf /root/.config/rclone/rclone.conf
 echo "RCLONE_REMOTE_FOLDER=$RCLONE_REMOTE_FOLDER" > /env_var
 echo "RCLONE_REMOTE_NAME=$RCLONE_REMOTE_NAME" >> /env_var
 echo "FAIL_NOTIFY_URL=$FAIL_NOTIFY_URL" >> /env_var
