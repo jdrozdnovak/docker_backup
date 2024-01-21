@@ -7,6 +7,7 @@ from zipfile import ZipFile
 import requests
 from datetime import datetime
 import socket
+import time
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger(__name__)
@@ -185,6 +186,7 @@ class DockerBackup:
             datetime.now().strftime("%Y%m%d%H%M%S"),
         )
         self.cleanup(base_dir, real_volume_names)
+        time.sleep(10)
 
 
 if __name__ == "__main__":
