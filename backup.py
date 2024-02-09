@@ -65,6 +65,7 @@ class DockerBackup:
             )
         except Exception as exc:
             logger.error(f"Failed to notify via URL {self.fail_notify_url}: {exc}")
+        sys.exit(1)
 
     def validate_and_notify_env_vars(self):
         """Validate and notify for environment variables."""
