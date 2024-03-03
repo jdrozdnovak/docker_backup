@@ -152,11 +152,10 @@ class DockerBackup:
     def get_hostname(self) -> str:
         """Retrieve the hostname."""
         try:
+            with open("/etc/host_hostname", "r") as file:
+                hostname = file.read().strip()
+        except FileNotFoundError:
             hostname = socket.gethostname()
-        except Exception as exc:
-            logger.error(f"Failed to retrieve hostname: {exc}")
-            self.backup_successful = False
-            hostname = "unknown"
         return hostname
 
     def main(self, docker_compose_file: str):
