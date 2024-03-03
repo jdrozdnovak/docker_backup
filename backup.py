@@ -54,6 +54,30 @@ class DockerBackup:
             self.backup_successful = False
             logger.error(f"Command execution failed: {exc}")
             return None
+        
+    def remove_file_or_dir(self, path: str):
+        """Remove a file or directory without using shutil, with error handling."""
+        try:
+            if os.path.exists(path):
+                if os.path.isfile(path):
+                    os.remove(path)
+                    logger.info(f"Removed file: {path}")
+                elif os.path.isdir(path):
+                    # Recursively delete directory contents
+                    for root, dirs, files in os.walk(path, topdown=False):
+                        for name in files:
+                            os.remove(os.path.join(root, name))
+                        for name in dirs:
+                            os.rmdir(os.path.join(root, name))
+                    # Remove the directory itself
+                    os.rmdir(path)
+                    logger.info(f"Removed directory and its contents: {path}")
+                else:
+                    logger.warning(f"Path is neither a file nor a directory: {path}")
+            else:
+                logger.warning(f"Path does not exist: {path}")
+        except Exception as e:
+            logger.error(f"Failed to remove {path}: {e}")
 
     def notify_failure(self):
         """Notify failure through a URL."""
