@@ -54,7 +54,7 @@ class DockerBackup:
             self.backup_successful = False
             logger.error(f"Command execution failed: {exc}")
             return None
-        
+
     def remove_file_or_dir(self, path: str):
         """Remove a file or directory without using shutil, with error handling."""
         try:
@@ -73,7 +73,9 @@ class DockerBackup:
                     os.rmdir(path)
                     logger.info(f"Removed directory and its contents: {path}")
                 else:
-                    logger.warning(f"Path is neither a file nor a directory: {path}")
+                    logger.warning(
+                        f"Path is neither a file nor a directory: {path}"
+                    )
             else:
                 logger.warning(f"Path does not exist: {path}")
         except Exception as e:
@@ -91,9 +93,14 @@ class DockerBackup:
                 )
 
     def cleanup(self, base_dir: str, volume_names: list):
+        """Cleanup backup files and directories."""
         for volume_name in volume_names:
-            self.remove_file_or_dir(f"{base_dir}/{volume_name}_backup")
-        self.remove_file_or_dir(f"{base_dir}/backup.zip")
+            backup_path = f"{base_dir}/{volume_name}_backup"
+            if os.path.exists(backup_path):
+                self.remove_file_or_dir(backup_path)
+        zip_path = f"{base_dir}/backup.zip"
+        if os.path.exists(zip_path):
+            self.remove_file_or_dir(zip_path)
 
     def read_docker_compose(self, file_path: str) -> dict:
         try:
@@ -116,26 +123,30 @@ class DockerBackup:
     def backup_volumes_to_zip(
         self, base_dir: str, real_volume_names: list
     ) -> str:
+        """Create a zip file from the specified volumes."""
         zip_file_path = f"{base_dir}/backup.zip"
-        with ZipFile(zip_file_path, "w") as zipf:
-            for volume_name in real_volume_names:
-                volume_path = f"{base_dir}/{volume_name}"
-                for root, dirs, files in os.walk(volume_path):
-                    for file in files:
-                        full_path = os.path.join(root, file)
-                        zipf.write(
-                            full_path, os.path.relpath(full_path, base_dir)
-                        )
+        try:
+            with ZipFile(zip_file_path, "w") as zipf:
+                for volume_name in real_volume_names:
+                    volume_path = f"{base_dir}/{volume_name}"
+                    for root, dirs, files in os.walk(volume_path):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            zipf.write(
+                                full_path, os.path.relpath(full_path, base_dir)
+                            )
+            logger.info(f"Backup zip created at {zip_file_path}")
+        except Exception as e:
+            logger.error(f"Failed to create backup zip: {e}")
+            self.backup_successful = False
         return zip_file_path
 
-    def rclone_upload(
-        self, file_path: str, parent_folder_name: str, suffix: str
-    ):
+    def rclone_upload(self, file_path, parent_folder_name, suffix):
         hostname = self.get_hostname()
-        remote_path = f"{self.remote_name}:{self.remote_folder}/{hostname}/{parent_folder_name}/"
-        remote_old_path = f"{self.remote_name}:{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
+        remote_path = f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
+        remote_old_path = f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
         self.execute_command(
-            f"rclone move {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
+            f"rclone sync {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
         )
 
     def get_hostname(self) -> str:
