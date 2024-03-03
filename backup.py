@@ -44,15 +44,16 @@ class DockerBackup:
             self.backup_successful = False
 
     def execute_command(self, command: str) -> subprocess.CompletedProcess:
+        logger.info(f"Executing command: {command}")
         try:
-            logger.info(f"Running command: {command}")
             result = subprocess.run(
                 command, shell=True, check=True, capture_output=True, text=True
             )
+            logger.info("Command executed successfully.")
             return result
         except subprocess.CalledProcessError as exc:
             self.backup_successful = False
-            logger.error(f"Command execution failed: {exc}")
+            logger.error(f"Command execution failed with error: {exc}")
             return None
 
     def remove_file_or_dir(self, path: str):
@@ -120,26 +121,21 @@ class DockerBackup:
         else:
             return []
 
-    def backup_volumes_to_zip(
-        self, base_dir: str, real_volume_names: list
-    ) -> str:
-        """Create a zip file from the specified volumes."""
+    def backup_volumes_to_zip(self, base_dir, real_volume_names):
+        logger.info("Starting backup of volumes to zip file...")
         zip_file_path = f"{base_dir}/backup.zip"
-        try:
-            with ZipFile(zip_file_path, "w") as zipf:
-                for volume_name in real_volume_names:
-                    volume_path = f"{base_dir}/{volume_name}"
-                    for root, dirs, files in os.walk(volume_path):
-                        for file in files:
-                            full_path = os.path.join(root, file)
-                            zipf.write(
-                                full_path, os.path.relpath(full_path, base_dir)
-                            )
-            logger.info(f"Backup zip created at {zip_file_path}")
-        except Exception as e:
-            logger.error(f"Failed to create backup zip: {e}")
-            self.backup_successful = False
+        with ZipFile(zip_file_path, 'w') as zipf:
+            for volume_name in real_volume_names:
+                logger.info(f"Backing up volume: {volume_name}")
+                volume_path = os.path.join(base_dir, volume_name) if not volume_name.startswith("/") else volume_name
+                for root, _, files in os.walk(volume_path):
+                    for file in files:
+                        full_path = os.path.join(root, file)
+                        relative_path = os.path.relpath(full_path, base_dir if volume_path.startswith(base_dir) else volume_path)
+                        zipf.write(full_path, relative_path)
+        logger.info(f"Backup completed successfully. Zip file created at: {zip_file_path}")
         return zip_file_path
+
 
     def rclone_upload(self, file_path, parent_folder_name, suffix):
         hostname = self.get_hostname()
@@ -159,6 +155,7 @@ class DockerBackup:
         return hostname
 
     def main(self, docker_compose_file: str):
+        logger.info(f"Starting backup process for Docker compose file: {docker_compose_file}")
         docker_volumes = self.list_docker_volumes()
         base_dir = os.path.dirname(docker_compose_file)
         compose_data = self.read_docker_compose(docker_compose_file)
@@ -166,19 +163,24 @@ class DockerBackup:
             compose_data, base_dir, docker_volumes
         )
 
+        logger.info("Real volume names identified for backup: " + ", ".join(real_volume_names))
+
         backup_zip_path = self.backup_volumes_to_zip(
             base_dir, real_volume_names
         )
+
         if self.backup_successful:
             self.rclone_upload(
                 backup_zip_path,
                 os.path.basename(base_dir),
                 datetime.now().strftime("%Y%m%d%H%M%S"),
             )
+            logger.info("Backup successfully uploaded.")
         else:
             self.notify_failure()
 
         self.cleanup(base_dir, real_volume_names)
+        logger.info("Backup process completed.")
 
     def get_real_volume_names(self, compose_data, base_dir, docker_volumes):
         real_volume_names = []
@@ -207,6 +209,7 @@ class DockerBackup:
                     )
                 if volume_name not in real_volume_names:
                     real_volume_names.append(volume_name)
+                    logger.info(f"{volume_name} for {service_name} appended")
         return real_volume_names
 
 
