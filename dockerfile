@@ -3,7 +3,8 @@ FROM ubuntu:24.04 as build-stage
 
 # Update and install all necessary packages in a single RUN command
 RUN apt update && \
-    apt install -y ca-certificates curl gnupg python3 python3-venv unzip cron build-essential libssl-dev && \
+    apt install -y ca-certificates curl gnupg python3 unzip cron build-essential libssl-dev && \
+    curl -sSL https://install.python-poetry.org | python3 - && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
     chmod a+r /etc/apt/keyrings/docker.gpg && \
@@ -23,16 +24,15 @@ RUN apt update && \
 # Set up Poetry path environment variable
 ENV PATH="/root/.local/bin:$PATH"
 
-# Tell Poetry to create the virtual environment inside the project directory
-RUN curl -sSL https://install.python-poetry.org | python3 - && poetry config virtualenvs.in-project true
-
 # Copy pyproject.toml and poetry.lock into the container
-COPY pyproject.toml poetry.lock /usr/src/app/
+COPY pyproject.toml /usr/src/app/
+COPY poetry.lock /usr/src/app/
 
 # Change to the app directory
 WORKDIR /usr/src/app
 
 # Install Python dependencies using Poetry, relying on the pre-existing lock file
+RUN poetry config virtualenvs.in-project true
 RUN poetry install --no-dev
 
 # Copy only necessary shell scripts and Python files
