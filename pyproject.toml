@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "docker backup"
+version = "0.1.0"
+description = "python packages for docker backup solution"
+authors = ["Jan Drozd Novak <jan.novak@outlook.com>"]
+
+# Specify the version of Python you want to use
+[tool.poetry.dependencies]
+python = "^3.1"
+pyyaml = "*"
+requests = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
