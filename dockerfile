@@ -3,7 +3,7 @@ FROM python:3.12-bookworm
 COPY requirements.txt .
 
 RUN apt update && \
-    apt install -y ca-certificates curl && \
+    apt install -y ca-certificates curl cron && \
     pip install -r requirements.txt && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
