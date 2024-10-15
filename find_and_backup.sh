@@ -11,7 +11,7 @@ fi
 touch "$LOCKFILE"
 
 # Run the backup script
-find /docker/ -type f \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" \) -exec python3 /usr/local/bin/backup.py {} \;
+find /docker/ -type f \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" \) -exec /usr/local/bin/python3 /usr/local/bin/backup.py {} \;
 
 # Remove lock file
 rm -f "$LOCKFILE"
