@@ -3,7 +3,7 @@ FROM python:3.12-bookworm
 COPY requirements.txt .
 
 RUN apt update && \
-    apt upgrade && \
+    apt upgrade -y && \
     apt install -y ca-certificates curl cron && \
     pip3 install -r requirements.txt && \
     install -m 0755 -d /etc/apt/keyrings && \
