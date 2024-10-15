@@ -99,14 +99,17 @@ class DockerBackup:
                 )
 
     def cleanup(self, base_dir: str, volume_names: list):
-        """Cleanup backup files and directories."""
+        """Cleanup individual volume zip files."""
         for volume_name in volume_names:
-            backup_path = f"{base_dir}/{volume_name}_backup"
-            if os.path.exists(backup_path):
-                self.remove_file_or_dir(backup_path)
+            volume_zip_path = f"{base_dir}/{volume_name}_backup.zip"
+            if os.path.exists(volume_zip_path):
+                self.remove_file_or_dir(volume_zip_path)
+                logger.info(f"Removed zip file: {volume_zip_path}")
+        
         zip_path = f"{base_dir}/backup.zip"
         if os.path.exists(zip_path):
-            self.remove_file_or_dir(zip_path)
+            logger.info(f"Final backup zip {zip_path} retained until confirmed upload.")
+
 
     def read_docker_compose(self, file_path: str) -> dict:
         try:
@@ -126,20 +129,43 @@ class DockerBackup:
         else:
             return []
 
-    def backup_volumes_to_zip(self, base_dir, real_volume_names):
-        logger.info("Starting backup of volumes to zip file...")
-        zip_file_path = f"{base_dir}/backup.zip"
-        with ZipFile(zip_file_path, 'w') as zipf:
+    def backup_volumes_to_zip(self, base_dir: str, real_volume_names: list):
+        logger.info("Starting backup of volumes to individual zip files...")
+        
+        for volume_name in real_volume_names:
+            # Create zip file for each volume
+            volume_zip_path = f"{base_dir}/{volume_name}_backup.zip"
+            volume_path = os.path.join(base_dir, volume_name) if not volume_name.startswith("/") else volume_name
+            
+            if not os.path.exists(volume_path):
+                logger.error(f"Volume path does not exist: {volume_path}")
+                continue
+            
+            logger.info(f"Creating zip for volume: {volume_name} at {volume_zip_path}")
+            with ZipFile(volume_zip_path, 'w') as zipf:
+                if os.path.isdir(volume_path):
+                    # Backup directory contents
+                    logger.info(f"Backing up directory: {volume_path}")
+                    for root, _, files in os.walk(volume_path):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            relative_path = os.path.relpath(full_path, volume_path)
+                            zipf.write(full_path, relative_path)
+                            logger.debug(f"Added {full_path} to {volume_zip_path}")
+                else:
+                    logger.warning(f"Volume path is not a directory: {volume_path}")
+        
+        # Now create the main zip file that contains all individual volume zips
+        main_zip_file_path = f"{base_dir}/backup.zip"
+        with ZipFile(main_zip_file_path, 'w') as main_zip:
             for volume_name in real_volume_names:
-                logger.info(f"Backing up volume: {volume_name}")
-                volume_path = os.path.join(base_dir, volume_name) if not volume_name.startswith("/") else volume_name
-                for root, _, files in os.walk(volume_path):
-                    for file in files:
-                        full_path = os.path.join(root, file)
-                        relative_path = os.path.relpath(full_path, base_dir if volume_path.startswith(base_dir) else volume_path)
-                        zipf.write(full_path, relative_path)
-        logger.info(f"Backup completed successfully. Zip file created at: {zip_file_path}")
-        return zip_file_path
+                volume_zip_path = f"{base_dir}/{volume_name}_backup.zip"
+                if os.path.exists(volume_zip_path):
+                    main_zip.write(volume_zip_path, os.path.basename(volume_zip_path))
+                    logger.debug(f"Added {volume_zip_path} to {main_zip_file_path}")
+        
+        logger.info(f"All volumes have been zipped into {main_zip_file_path}")
+        return main_zip_file_path
 
 
     def rclone_upload(self, file_path: str, parent_folder_name: str, suffix: str):
