@@ -3,8 +3,9 @@ FROM python:3.12-bookworm
 COPY requirements.txt .
 
 RUN apt update && \
+    apt pgrade && \
     apt install -y ca-certificates curl cron && \
-    pip install -r requirements.txt && \
+    pip3 install -r requirements.txt && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
     chmod a+r /etc/apt/keyrings/docker.asc && \
