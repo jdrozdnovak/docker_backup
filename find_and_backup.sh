@@ -1,4 +1,17 @@
-#!/bin/bash
-PYTHON_EXEC="/usr/src/app/.venv/bin/python"
-# Search for docker-compose files and perform backup
-find /docker/ -type f \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" \) -exec $PYTHON_EXEC /usr/local/bin/backup.py {} \;
+#!/bin/sh
+LOCKFILE="/tmp/find_and_backup.lock"
+
+# Check if lock file exists
+if [ -f "$LOCKFILE" ]; then
+    echo "Backup process already running."
+    exit 1
+fi
+
+# Create lock file
+touch "$LOCKFILE"
+
+# Run the backup script
+find /docker/ -type f \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" \) -exec /usr/local/bin/python3 /usr/local/bin/backup.py {} \;
+
+# Remove lock file
+rm -f "$LOCKFILE"

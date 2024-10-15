@@ -1,6 +1,5 @@
 #!/bin/sh
 
-# Write the cron schedule and command to a file
 echo "$CRON_SCHEDULE"
 echo $RCLONE_REMOTE_FOLDER
 echo $RCLONE_REMOTE_NAME

@@ -20,7 +20,12 @@ class DockerBackup:
         self.remote_name: str = None
         self.fail_notify_url: str = None
         self.backup_successful: bool = True
+        self.debug_mode: bool = os.getenv("DEBUG", "false").lower() == "true"
         self.read_env_vars_from_file("/env_var")
+
+        if self.debug_mode:
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug mode enabled")
 
     @staticmethod
     def normalize_path(path: str) -> str:
@@ -94,14 +99,17 @@ class DockerBackup:
                 )
 
     def cleanup(self, base_dir: str, volume_names: list):
-        """Cleanup backup files and directories."""
+        """Cleanup individual volume zip files."""
         for volume_name in volume_names:
-            backup_path = f"{base_dir}/{volume_name}_backup"
-            if os.path.exists(backup_path):
-                self.remove_file_or_dir(backup_path)
+            volume_zip_path = f"{base_dir}/{volume_name}_backup.zip"
+            if os.path.exists(volume_zip_path):
+                self.remove_file_or_dir(volume_zip_path)
+                logger.info(f"Removed zip file: {volume_zip_path}")
+        
         zip_path = f"{base_dir}/backup.zip"
         if os.path.exists(zip_path):
-            self.remove_file_or_dir(zip_path)
+            logger.info(f"Final backup zip {zip_path} retained until confirmed upload.")
+
 
     def read_docker_compose(self, file_path: str) -> dict:
         try:
@@ -121,29 +129,59 @@ class DockerBackup:
         else:
             return []
 
-    def backup_volumes_to_zip(self, base_dir, real_volume_names):
-        logger.info("Starting backup of volumes to zip file...")
-        zip_file_path = f"{base_dir}/backup.zip"
-        with ZipFile(zip_file_path, 'w') as zipf:
+    def backup_volumes_to_zip(self, base_dir: str, real_volume_names: list):
+        logger.info("Starting backup of volumes to individual zip files...")
+        
+        for volume_name in real_volume_names:
+            # Create zip file for each volume
+            volume_zip_path = f"{base_dir}/{volume_name}_backup.zip"
+            volume_path = os.path.join(base_dir, volume_name) if not volume_name.startswith("/") else volume_name
+            
+            if not os.path.exists(volume_path):
+                logger.error(f"Volume path does not exist: {volume_path}")
+                continue
+            
+            logger.info(f"Creating zip for volume: {volume_name} at {volume_zip_path}")
+            with ZipFile(volume_zip_path, 'w') as zipf:
+                if os.path.isdir(volume_path):
+                    # Backup directory contents
+                    logger.info(f"Backing up directory: {volume_path}")
+                    for root, _, files in os.walk(volume_path):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            relative_path = os.path.relpath(full_path, volume_path)
+                            zipf.write(full_path, relative_path)
+                            logger.debug(f"Added {full_path} to {volume_zip_path}")
+                else:
+                    logger.warning(f"Volume path is not a directory: {volume_path}")
+        
+        # Now create the main zip file that contains all individual volume zips
+        main_zip_file_path = f"{base_dir}/backup.zip"
+        with ZipFile(main_zip_file_path, 'w') as main_zip:
             for volume_name in real_volume_names:
-                logger.info(f"Backing up volume: {volume_name}")
-                volume_path = os.path.join(base_dir, volume_name) if not volume_name.startswith("/") else volume_name
-                for root, _, files in os.walk(volume_path):
-                    for file in files:
-                        full_path = os.path.join(root, file)
-                        relative_path = os.path.relpath(full_path, base_dir if volume_path.startswith(base_dir) else volume_path)
-                        zipf.write(full_path, relative_path)
-        logger.info(f"Backup completed successfully. Zip file created at: {zip_file_path}")
-        return zip_file_path
+                volume_zip_path = f"{base_dir}/{volume_name}_backup.zip"
+                if os.path.exists(volume_zip_path):
+                    main_zip.write(volume_zip_path, os.path.basename(volume_zip_path))
+                    logger.debug(f"Added {volume_zip_path} to {main_zip_file_path}")
+        
+        logger.info(f"All volumes have been zipped into {main_zip_file_path}")
+        return main_zip_file_path
 
 
-    def rclone_upload(self, file_path, parent_folder_name, suffix):
+    def rclone_upload(self, file_path: str, parent_folder_name: str, suffix: str):
         hostname = self.get_hostname()
         remote_path = f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
         remote_old_path = f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
-        self.execute_command(
-            f"rclone sync {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
+        rclone_flags = "-vv" if self.debug_mode else ""
+        
+        command = (
+            f"rclone sync {file_path} {remote_path} "
+            f"--backup-dir {remote_old_path} {rclone_flags} "
+            f"--suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
         )
+
+        self.execute_command(command)
+
 
     def get_hostname(self) -> str:
         """Retrieve the hostname."""
@@ -155,32 +193,43 @@ class DockerBackup:
         return hostname
 
     def main(self, docker_compose_file: str):
-        logger.info(f"Starting backup process for Docker compose file: {docker_compose_file}")
-        docker_volumes = self.list_docker_volumes()
-        base_dir = os.path.dirname(docker_compose_file)
-        compose_data = self.read_docker_compose(docker_compose_file)
-        real_volume_names = self.get_real_volume_names(
-            compose_data, base_dir, docker_volumes
-        )
-
-        logger.info("Real volume names identified for backup: " + ", ".join(real_volume_names))
-
-        backup_zip_path = self.backup_volumes_to_zip(
-            base_dir, real_volume_names
-        )
-
-        if self.backup_successful:
-            self.rclone_upload(
-                backup_zip_path,
-                os.path.basename(base_dir),
-                datetime.now().strftime("%Y%m%d%H%M%S"),
+        try:
+            logger.info(f"Starting backup process for Docker compose file: {docker_compose_file}")
+            docker_volumes = self.list_docker_volumes()
+            base_dir = os.path.dirname(docker_compose_file)
+            compose_data = self.read_docker_compose(docker_compose_file)
+            real_volume_names = self.get_real_volume_names(
+                compose_data, base_dir, docker_volumes
             )
-            logger.info("Backup successfully uploaded.")
-        else:
-            self.notify_failure()
 
-        self.cleanup(base_dir, real_volume_names)
-        logger.info("Backup process completed.")
+            logger.info("Real volume names identified for backup: " + ", ".join(real_volume_names))
+
+            backup_zip_path = self.backup_volumes_to_zip(
+                base_dir, real_volume_names
+            )
+
+            if self.backup_successful:
+                self.rclone_upload(
+                    backup_zip_path,
+                    os.path.basename(base_dir),
+                    datetime.now().strftime("%Y%m%d%H%M%S"),
+                )
+                logger.info("Backup successfully uploaded.")
+            else:
+                self.notify_failure()
+
+            self.cleanup(base_dir, real_volume_names)
+            logger.info("Backup process completed.")
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {e}")
+            self.backup_successful = False
+            self.notify_failure()
+            sys.exit(1)
+
+        if not self.backup_successful:
+            sys.exit(1)
+
 
     def get_real_volume_names(self, compose_data, base_dir, docker_volumes):
         real_volume_names = []
