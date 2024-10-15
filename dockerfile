@@ -18,6 +18,7 @@ RUN apt update && \
     apt autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
+    touch /var/spool/cron/crontabs/root && \
     mkdir -p ~/.config/rclone/
 
 COPY find_and_backup.sh /usr/local/bin/
