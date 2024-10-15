@@ -142,14 +142,20 @@ class DockerBackup:
         return zip_file_path
 
 
-    def rclone_upload(self, file_path, parent_folder_name, suffix):
+    def rclone_upload(self, file_path: str, parent_folder_name: str, suffix: str):
         hostname = self.get_hostname()
         remote_path = f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
         remote_old_path = f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
         rclone_flags = "-vv" if self.debug_mode else ""
-        self.execute_command(
-            f"rclone sync {file_path} {remote_path} --backup-dir {remote_old_path} {rclone_flags} --suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
+        
+        command = (
+            f"rclone sync {file_path} {remote_path} "
+            f"--backup-dir {remote_old_path} {rclone_flags} "
+            f"--suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
         )
+
+        self.execute_command(command)
+
 
     def get_hostname(self) -> str:
         """Retrieve the hostname."""
