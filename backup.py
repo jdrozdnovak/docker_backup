@@ -20,7 +20,12 @@ class DockerBackup:
         self.remote_name: str = None
         self.fail_notify_url: str = None
         self.backup_successful: bool = True
+        self.debug_mode: bool = os.getenv("DEBUG", "false").lower() == "true"
         self.read_env_vars_from_file("/env_var")
+
+        if self.debug_mode:
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug mode enabled")
 
     @staticmethod
     def normalize_path(path: str) -> str:
@@ -141,8 +146,9 @@ class DockerBackup:
         hostname = self.get_hostname()
         remote_path = f"{self.remote_name}:/{self.remote_folder}/{hostname}/{parent_folder_name}/"
         remote_old_path = f"{self.remote_name}:/{self.remote_folder}/old/{hostname}/{parent_folder_name}/"
+        rclone_flags = "-vv" if self.debug_mode else ""
         self.execute_command(
-            f"rclone sync {file_path} {remote_path} --backup-dir {remote_old_path} --suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
+            f"rclone sync {file_path} {remote_path} --backup-dir {remote_old_path} {rclone_flags} --suffix {suffix} --suffix-keep-extension --cache-dir /tmp/"
         )
 
     def get_hostname(self) -> str:
@@ -155,32 +161,43 @@ class DockerBackup:
         return hostname
 
     def main(self, docker_compose_file: str):
-        logger.info(f"Starting backup process for Docker compose file: {docker_compose_file}")
-        docker_volumes = self.list_docker_volumes()
-        base_dir = os.path.dirname(docker_compose_file)
-        compose_data = self.read_docker_compose(docker_compose_file)
-        real_volume_names = self.get_real_volume_names(
-            compose_data, base_dir, docker_volumes
-        )
-
-        logger.info("Real volume names identified for backup: " + ", ".join(real_volume_names))
-
-        backup_zip_path = self.backup_volumes_to_zip(
-            base_dir, real_volume_names
-        )
-
-        if self.backup_successful:
-            self.rclone_upload(
-                backup_zip_path,
-                os.path.basename(base_dir),
-                datetime.now().strftime("%Y%m%d%H%M%S"),
+        try:
+            logger.info(f"Starting backup process for Docker compose file: {docker_compose_file}")
+            docker_volumes = self.list_docker_volumes()
+            base_dir = os.path.dirname(docker_compose_file)
+            compose_data = self.read_docker_compose(docker_compose_file)
+            real_volume_names = self.get_real_volume_names(
+                compose_data, base_dir, docker_volumes
             )
-            logger.info("Backup successfully uploaded.")
-        else:
-            self.notify_failure()
 
-        self.cleanup(base_dir, real_volume_names)
-        logger.info("Backup process completed.")
+            logger.info("Real volume names identified for backup: " + ", ".join(real_volume_names))
+
+            backup_zip_path = self.backup_volumes_to_zip(
+                base_dir, real_volume_names
+            )
+
+            if self.backup_successful:
+                self.rclone_upload(
+                    backup_zip_path,
+                    os.path.basename(base_dir),
+                    datetime.now().strftime("%Y%m%d%H%M%S"),
+                )
+                logger.info("Backup successfully uploaded.")
+            else:
+                self.notify_failure()
+
+            self.cleanup(base_dir, real_volume_names)
+            logger.info("Backup process completed.")
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {e}")
+            self.backup_successful = False
+            self.notify_failure()
+            sys.exit(1)
+
+        if not self.backup_successful:
+            sys.exit(1)
+
 
     def get_real_volume_names(self, compose_data, base_dir, docker_volumes):
         real_volume_names = []
